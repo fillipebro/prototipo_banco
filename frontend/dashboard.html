@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard — Bradesco Digital</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-app">
+  <canvas id="bgParticles"></canvas>
+
+  <div class="dashboard-wrap">
+    <div class="dashboard-top">
+      <nav class="topbar" id="topNav" aria-label="Navegação principal">
+        <a href="#homeSection" class="tab-btn" data-target="#homeSection">Home</a>
+        <a href="#transferSection" class="tab-btn" data-target="#transferSection">Transferência</a>
+        <a href="#historySection" class="tab-btn" data-target="#historySection">Histórico</a>
+        <button class="tab-btn danger" id="logoutTop">Sair</button>
+      </nav>
+
+      <h3>Olá, <span id="userName">Usuário</span></h3>
+      
+    </div>
+
+    <div class="dashboard-body">
+<div class="widget" id="profileSection">
+  <h4>Meu Perfil</h4>
+  <form id="profileForm" class="form" autocomplete="off" style="margin-top:6px">
+    <div class="field">
+      <span>Nome</span>
+      <input type="text" id="pf_name" placeholder="Seu nome completo">
+    </div>
+    <div class="field">
+      <span>Foto (PNG/JPEG)</span>
+      <input type="file" id="pf_photo" accept="image/png,image/jpeg">
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; margin:8px 0">
+      <img id="pf_preview" alt="Prévia" style="width:64px; height:64px; object-fit:cover; border-radius:50%; border:1px solid rgba(255,255,255,.18); display:none">
+      <span id="pf_info" class="muted"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar</button>
+  </form>
+</div>
+
+<div class="widget" id="contactsSection">
+  <h4>Contatos Favoritos</h4>
+  <form id="contactForm" class="form" autocomplete="off" style="margin-top:6px">
+    <div class="field">
+      <span>Nome do contato</span>
+      <input type="text" id="ct_name" placeholder="Ex.: Maria da Silva">
+    </div>
+    <div class="field">
+      <span>CPF do contato</span>
+      <input type="text" id="ct_cpf" class="cpf-input" maxlength="14" placeholder="000.000.000-00">
+    </div>
+    <button type="submit" class="btn btn-primary">Adicionar</button>
+  </form>
+  <div class="table-wrap" style="margin-top:12px">
+    <table class="table" id="contactsTable">
+      <thead><tr><th>Nome</th><th>CPF</th><th>Ações</th></tr></thead>
+      <tbody><tr><td colspan="3" class="muted">Carregando…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="widget" id="homeSection">
+  <h4>Histórico de Transações</h4>
+  <div class="table-wrap">
+    <table class="table" id="transfersTable" aria-label="Histórico de transações">
+      <thead>
+        <tr><th>Data/Hora</th><th>Tipo</th><th>Valor</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="4" class="muted">Carregando…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="widget">
+  <h4>Transferência (PIX/TED)</h4>
+  <div id="transferAlert" class="alert" role="alert"></div>
+  <form id="transferForm" class="form" autocomplete="off">
+    <label class="field">
+      <span>Valor (R$)</span>
+      <input type="text" id="amount" inputmode="decimal" placeholder="0,00" required>
+    </label>
+    <label class="field">
+      <span>Tipo</span>
+      <select id="type" required>
+        <option value="pix">PIX</option>
+        <option value="ted">TED</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>CPF do destinatário (opcional)</span>
+      <input type="text" id="to_cpf" class="cpf-input" maxlength="14" placeholder="000.000.000-00">
+    </label>
+    <button type="submit" id="transferSubmit" class="btn btn-primary">Transferir</button>
+  </form>
+  <p class="muted" style="margin-top:10px">Regras: transações acima de R$ 2.000,00 após 19:00 são bloqueadas para PIX/TED.</p>
+</div>
+
+      <div class="widget">
+        <h4>Saldo disponível</h4>
+        <p style="margin-top:8px; font-size:1.4rem; font-weight:800; color:#fff">R$ 0,00</p>
+      </div>
+      <div class="widget">
+        <h4>Transações recentes</h4>
+        <p style="margin-top:8px; color:#cfcfcf">Em breve…</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/anim.js"></script>
+  <script src="js/guard.js"></script>
+  <script>
+    document.getElementById('logoutBtn').addEventListener('click', ()=>{
+      localStorage.removeItem('token');
+      localStorage.removeItem('userName');
+      window.location.href = 'login.html';
+    });
+  </script>
+  <script src="js/anim.js"></script>
+  <script src="js/guard.js"></script>
+  <script src="js/cpf.js"></script>
+  <script src="js/transfer.js"></script>
+  <script src="js/transfer_history.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/balance.js"></script>
+  <script src="js/receipt.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/contacts.js"></script>
+<div id="receiptModal" class="modal" aria-hidden="true" role="dialog" aria-label="Comprovante de transferência">
+  <div class="modal-content">
+    <h4>Comprovante</h4>
+    <div class="receipt-body">
+      <p><strong>Status:</strong> <span id="rc_status">—</span></p>
+      <p><strong>Tipo:</strong> <span id="rc_type">—</span></p>
+      <p><strong>Valor:</strong> <span id="rc_amount">—</span></p>
+      <p><strong>Destinatário (CPF):</strong> <span id="rc_cpf">—</span></p>
+      <p><strong>Data/Hora:</strong> <span id="rc_ts">—</span></p>
+      <p><strong>Nº de referência:</strong> <span id="rc_id">—</span></p>
+      <p><strong>Verificação:</strong> <span id="rc_verif">—</span></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="rc_close">Fechar</button>
+      <button class="btn btn-primary" id="rc_print">Imprimir/Salvar PDF</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
