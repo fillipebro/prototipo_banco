@@ -1,0 +1,23 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: securebank
+    ports: ["3306:3306"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_USER: root
+      DB_PASS: root
+      JWT_SECRET: super-secret-change-me-please-32bytes
+    ports: ["8080:8080"]
