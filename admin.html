@@ -1,39 +1,63 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Admin — Banco Bradesco</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Painel do Administrador — Bradesco Digital</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="bg-app">
   <canvas id="bgParticles"></canvas>
+  <a class="corner-logo" href="index.html" aria-label="Voltar para a página inicial">
+    <img src="img/logo.png" alt="Bradesco">
+  </a>
+
   <div class="dashboard-wrap">
     <header class="dashboard-top">
       <div style="display:flex;align-items:center;gap:10px;">
         <img src="img/logo.png" alt="Banco Bradesco" class="logo-hero" style="height:44px;width:auto;">
         <div>
-          <h3>Área do Administrador</h3>
-          <small style="color:rgba(255,255,255,.7)">Aprovação de cadastros e gestão de clientes</small>
+          <h1 class="dash-title">Painel do Administrador</h1>
+          <p class="muted">Aprovação de cadastros de clientes</p>
         </div>
       </div>
-      <nav class="topbar">
-        <a href="index.html" class="tab-btn">Home</a>
-        <button id="btnPend" type="button" class="tab-btn active">Pendentes</button>
-        <button id="btnTodos" type="button" class="tab-btn">Todos</button>
-      </nav>
+      <button id="btnLogout" class="btn btn-outline">Sair</button>
     </header>
 
-    <main class="dashboard-body">
-      <section class="widget" style="grid-column:1 / -1;">
-        <header class="widget-header">
-          <div>
-            <h4>Cadastros de clientes</h4>
-            <small style="color:rgba(255,255,255,.7)">Acompanhe solicitações de nova conta e aprove ou rejeite</small>
-          </div>
+    <main class="dashboard-main">
+      <!-- Tabela de pendentes -->
+      <section class="panel wide">
+        <header class="panel-header">
+          <h2>Cadastros pendentes</h2>
         </header>
-        <div class="table-wrap">
+        <div class="panel-body">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>E-mail</th>
+                <th>Data cadastro</th>
+                <th style="text-align:right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyPendentes">
+              <tr>
+                <td class="muted" colspan="5">Carregando...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Tabela de todos os clientes -->
+      <section class="panel wide">
+        <header class="panel-header">
+          <h2>Todos os clientes</h2>
+          <p class="muted">Situação: pendente, ativo ou reprovado</p>
+        </header>
+        <div class="panel-body">
           <table class="table">
             <thead>
               <tr>
@@ -41,20 +65,21 @@
                 <th>CPF</th>
                 <th>E-mail</th>
                 <th>Status</th>
-                <th style="text-align:right;">Ações</th>
+                <th>Data cadastro</th>
               </tr>
             </thead>
-            <tbody id="tbody">
-              <tr><td class="muted" colspan="5">Carregando...</td></tr>
+            <tbody id="tbodyTodos">
+              <tr>
+                <td class="muted" colspan="5">Carregando...</td>
+              </tr>
             </tbody>
           </table>
         </div>
-        <div id="msg" class="muted" style="margin-top:10px;"></div>
       </section>
     </main>
   </div>
 
-    <script src="js/anim.js"></script>
-  <script src="js/admin.js"></script>
+  <script src="anim.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>

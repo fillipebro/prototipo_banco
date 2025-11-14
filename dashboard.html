@@ -3,149 +3,159 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PIX — Banco Bradesco</title>
+  <title>Minha Conta — Bradesco Digital</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="bg-app">
+  <!-- Fundo animado -->
   <canvas id="bgParticles"></canvas>
 
+  <!-- Logo canto superior -->
+  <a class="corner-logo" href="index.html" aria-label="Voltar para a página inicial">
+    <img src="img/logo.png" alt="Bradesco">
+  </a>
+
   <div class="dashboard-wrap">
+    <!-- Topo do dashboard -->
     <header class="dashboard-top">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <img src="img/logo.png" alt="Banco Bradesco" class="logo-hero" style="height:40px;width:auto;">
-        <div>
-          <h3>Área PIX</h3>
-          <small style="color:rgba(255,255,255,.7)">Cadastro de chaves e transferências em tempo real</small>
-        </div>
+      <div class="dash-top-left">
+        <p class="muted dash-kicker">Bem-vindo ao Bradesco Digital</p>
+        <h1 class="dash-title">
+          Olá, <span id="userName">Cliente</span> 👋
+        </h1>
+        <p class="muted dash-subtitle">
+          Acompanhe seu saldo, faça PIX e veja seu extrato em tempo real.
+        </p>
       </div>
-      <div class="topbar">
-        <span class="tab-btn active" style="pointer-events:none;">PIX</span>
-        <a href="index.html" class="tab-btn">Sair</a>
-      </div>
+      <button id="btnLogout" class="btn btn-outline">Sair</button>
     </header>
 
-    <main class="dashboard-body">
-      <!-- Saldo e dados da conta -->
-      <section class="widget">
-        <header class="widget-header">
-          <div>
-            <h4>Minha conta</h4>
-            <small style="color:rgba(255,255,255,.7)">Agência, conta e saldo disponível</small>
+    <main class="dashboard-main">
+      <!-- Primeira linha: resumo + ações rápidas -->
+      <div class="dash-grid">
+        <!-- Resumo da conta -->
+        <section class="panel highlight">
+          <header class="panel-header">
+            <div>
+              <h2>Resumo da conta</h2>
+              <p class="muted small">Dados principais da sua conta</p>
+            </div>
+          </header>
+          <div class="panel-body">
+            <div class="account-overview">
+              <div class="account-balance-card">
+                <p class="muted small">Saldo disponível</p>
+                <p class="balance-text">
+                  R$ <span id="balance">0,00</span>
+                </p>
+              </div>
+              <div class="account-meta">
+                <div class="account-meta-item">
+                  <span class="muted label">Agência</span>
+                  <span class="value" id="agency">-</span>
+                </div>
+                <div class="account-meta-item">
+                  <span class="muted label">Conta</span>
+                  <span class="value" id="accountNumber">-</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </header>
-        <div class="card-balance">
-          <div class="balance-label">Saldo disponível</div>
-          <div class="balance-value">R$ <span id="saldo">0,00</span></div>
-          <div class="balance-meta">
-            Agência <span id="agencia">0001</span> • Conta <span id="conta">000000-0</span>
-          </div>
-          <div class="balance-meta" style="font-size:13px;opacity:.85;margin-top:4px;">
-            <span id="cliente-nome">Cliente</span> • CPF <span id="cliente-cpf">---</span> • <span id="cliente-email">---</span>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Minhas chaves PIX -->
-      <section class="widget">
-        <header class="widget-header">
-          <div>
-            <h4>Minhas chaves PIX</h4>
-            <small style="color:rgba(255,255,255,.7)">Cadastre uma chave para receber transferências</small>
-          </div>
-        </header>
+        <!-- PIX: cadastro de chaves -->
+        <section class="panel">
+          <header class="panel-header">
+            <div>
+              <h2>PIX • Minhas chaves</h2>
+              <p class="muted small">Cadastre ou consulte suas chaves PIX</p>
+            </div>
+          </header>
+          <div class="panel-body">
+            <div class="form-row">
+              <label for="pixTipo">Tipo de chave</label>
+              <select id="pixTipo">
+                <option value="cpf">CPF</option>
+                <option value="email">E-mail</option>
+                <option value="phone">Telefone</option>
+                <option value="random">Aleatória</option>
+              </select>
+            </div>
+            <div class="form-row" id="rowPixValor">
+              <label for="pixValor">Valor da chave (exceto aleatória)</label>
+              <input type="text" id="pixValor" placeholder="CPF, e-mail ou telefone">
+            </div>
+            <button id="btnAddPix" class="btn full">Cadastrar chave PIX</button>
 
-        <form id="form-chave-pix" class="form" autocomplete="off" style="margin-top:8px;">
-          <div class="field">
-            <span>Tipo da chave</span>
-            <select id="tipo-chave" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 10px;color:#fff;">
-              <option value="cpf">CPF</option>
-              <option value="email">E-mail</option>
-              <option value="phone">Celular</option>
-              <option value="random">Aleatória</option>
-            </select>
-          </div>
-          <div class="field" id="field-valor-chave">
-            <span>Valor da chave</span>
-            <input id="valor-chave" type="text" placeholder="Digite o CPF, e-mail, celular ou deixe vazio para aleatória" />
-          </div>
-          <button type="submit" class="btn btn-primary">Cadastrar chave PIX</button>
-        </form>
+            <hr>
 
-        <div class="table-wrap" style="margin-top:16px;">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Chave</th>
-                <th>Criada em</th>
-              </tr>
-            </thead>
-            <tbody id="lista-chaves">
-              <tr><td class="muted" colspan="3">Nenhuma chave cadastrada.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+            <h3 class="section-subtitle">Chaves cadastradas</h3>
+            <ul id="listaPix" class="list small">
+              <li class="muted">Nenhuma chave cadastrada.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
 
-      <!-- Enviar PIX -->
-      <section class="widget">
-        <header class="widget-header">
-          <div>
-            <h4>Enviar PIX</h4>
-            <small style="color:rgba(255,255,255,.7)">Informe a chave de destino e o valor para transferir</small>
+      <!-- Segunda linha: enviar PIX + extrato -->
+      <div class="dash-grid wide">
+        <!-- Enviar PIX -->
+        <section class="panel">
+          <header class="panel-header">
+            <div>
+              <h2>Enviar PIX</h2>
+              <p class="muted small">Transfira valores para qualquer chave PIX</p>
+            </div>
+          </header>
+          <div class="panel-body">
+            <div class="form-row">
+              <label for="pixChaveDestino">Chave de destino</label>
+              <input type="text" id="pixChaveDestino" placeholder="Chave PIX do destinatário">
+            </div>
+            <div class="form-row">
+              <label for="pixValorEnvio">Valor</label>
+              <input type="number" step="0.01" id="pixValorEnvio" placeholder="0,00">
+            </div>
+            <div class="form-row">
+              <label for="pixDescricao">Descrição (opcional)</label>
+              <input type="text" id="pixDescricao" placeholder="Ex.: pagamento, transferência...">
+            </div>
+            <button id="btnEnviarPix" class="btn btn-primary full">Enviar PIX</button>
           </div>
-        </header>
+        </section>
 
-        <form id="form-transferencia" class="form" autocomplete="off" style="margin-top:8px;">
-          <div class="field">
-            <span>Chave PIX de destino</span>
-            <input id="chave-destino" type="text" placeholder="CPF, e-mail ou chave aleatória" />
+        <!-- Extrato -->
+        <section class="panel wide">
+          <header class="panel-header">
+            <div>
+              <h2>Extrato</h2>
+              <p class="muted small">Histórico de entradas e saídas na sua conta</p>
+            </div>
+          </header>
+          <div class="panel-body">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Tipo</th>
+                  <th>Valor</th>
+                  <th>Descrição</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyExtrato">
+                <tr>
+                  <td colspan="4" class="muted">Carregando...</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div class="field">
-            <span>Valor</span>
-            <input id="valor-transferencia" type="number" step="0.01" min="0" placeholder="0,00" />
-          </div>
-          <div class="field">
-            <span>Descrição (opcional)</span>
-            <input id="descricao-transferencia" type="text" placeholder="Ex: Pagamento, empréstimo..." />
-          </div>
-          <button type="submit" class="btn btn-primary">Continuar</button>
-        </form>
-
-        <p class="muted" style="margin-top:12px;">
-          Para receber um PIX, compartilhe uma das suas chaves cadastradas acima.
-        </p>
-      </section>
-
-      <!-- Extrato PIX -->
-      <section class="widget">
-        <header class="widget-header">
-          <div>
-            <h4>Extrato PIX</h4>
-            <small style="color:rgba(255,255,255,.7)">Visualize envios e recebimentos recentes</small>
-          </div>
-        </header>
-        <div class="table-wrap" style="margin-top:8px;">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Valor</th>
-                <th>Descrição</th>
-                <th>Data</th>
-              </tr>
-            </thead>
-            <tbody id="extrato-body">
-              <tr><td class="muted" colspan="4">Nenhuma movimentação encontrada.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   </div>
 
-  <script src="js/anim.js"></script>
-  <script src="js/dashboard.pix.js"></script>
+  <script src="anim.js"></script>
+  <script src="dashboard.pix.js"></script>
 </body>
 </html>

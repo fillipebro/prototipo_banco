@@ -7,6 +7,10 @@ const crypto = require('crypto');
 const { pool } = require('./db');
 require('dotenv').config();
 
+// ⚠️ DEV APENAS: ignora erro de certificado TLS (self-signed)
+// NÃO use isso em produção real.
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -14,89 +18,95 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'segredo-dev';
 
-// ----------------- CONFIG ADMIN -----------------
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase();
-const ADMIN_CPF = (process.env.ADMIN_CPF || '00000000000').replace(/\D+/g, '');
-const ADMIN_NAME = process.env.ADMIN_NAME || 'Administrador';
+// --- Configuração do administrador padrão ---
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'rfillipe21@gmail.com').toLowerCase();
+const ADMIN_CPF = (process.env.ADMIN_CPF || '55781176861').replace(/\D+/g, '');
+const ADMIN_NAME = process.env.ADMIN_NAME || 'Fillipe de Oliveira Ribeiro';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '123456';
 
-// 2FA em memória
+// Mapa em memória para códigos 2FA do admin
 const adminTokens = new Map();
 
-// ----------------- SMTP (GMAIL) -----------------
+// --- Configuração SMTP (Gmail) com TLS relaxado (DEV) ---
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
-  secure: true,
+  secure: true, // SSL direto
   auth: {
     user: process.env.SMTP_USER || ADMIN_EMAIL,
     pass: process.env.SMTP_PASS
   },
-  tls: { rejectUnauthorized: false }
+  tls: {
+    // ⚠️ APENAS PARA DESENVOLVIMENTO:
+    // Ignora certificado autoassinado no caminho até o Gmail
+    rejectUnauthorized: false
+  }
 });
 
 transporter.verify((err) => {
-  if (err) console.error('Erro SMTP:', err.message || err);
-  else console.log('SMTP Gmail OK');
+  if (err) {
+    console.error('Erro SMTP:', err.message || err);
+  } else {
+    console.log('SMTP Gmail OK');
+  }
 });
 
-// ----------------- HELPERS JWT -----------------
+// --- Funções auxiliares de autenticação ---
 function gerarTokenJWT(payload, expiresIn = '8h') {
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
 }
 
 function authUser(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header) return res.status(401).json({ ok: false, message: 'Token ausente.' });
-  const token = header.split(' ')[1];
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Token ausente' });
+  const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.user = decoded; // { id, role }
     next();
-  } catch {
-    return res.status(401).json({ ok: false, message: 'Token inválido.' });
+  } catch (err) {
+    return res.status(401).json({ error: 'Token inválido' });
   }
 }
 
 function authAdmin(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header) return res.status(401).json({ ok: false, message: 'Token ausente.' });
-  const token = header.split(' ')[1];
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Token ausente' });
+  const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     if (decoded.role !== 'admin') {
-      return res.status(403).json({ ok: false, message: 'Acesso não autorizado.' });
+      return res.status(403).json({ error: 'Permissão negada' });
     }
     req.admin = decoded;
     next();
-  } catch {
-    return res.status(401).json({ ok: false, message: 'Token inválido.' });
+  } catch (err) {
+    return res.status(401).json({ error: 'Token inválido' });
   }
 }
 
-// ----------------- ADMIN AUTO -----------------
+// --- Criação do admin padrão e tentativa de conexão ao MySQL ---
 async function ensureAdminUser() {
-  const [rows] = await pool.execute(
-    'SELECT id FROM users WHERE role = "admin" LIMIT 1'
-  );
-  if (rows.length) {
-    console.log('Administrador já existe no banco.');
-    return;
+  try {
+    const [rows] = await pool.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    if (rows.length) {
+      console.log('Administrador já existe no banco.');
+      return;
+    }
+    const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+    const [result] = await pool.execute(
+      "INSERT INTO users (name,email,cpf,password_hash,role,status) VALUES (?,?,?,?, 'admin','active')",
+      [ADMIN_NAME, ADMIN_EMAIL, ADMIN_CPF, hash]
+    );
+    const adminId = result.insertId;
+    await pool.execute(
+      "INSERT INTO accounts (user_id,agency,account_number,balance) VALUES (?,?,?,?)",
+      [adminId, '0001', '000000-0', 0.00]
+    );
+    console.log('Usuário administrador criado automaticamente.');
+  } catch (err) {
+    console.error('Erro ao criar admin padrão:', err);
   }
-
-  const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-  const [result] = await pool.execute(
-    'INSERT INTO users (name,email,cpf,password_hash,role,status) VALUES (?,?,?,?,"admin","active")',
-    [ADMIN_NAME, ADMIN_EMAIL, ADMIN_CPF, hash]
-  );
-  const adminId = result.insertId;
-
-  await pool.execute(
-    'INSERT INTO accounts (user_id,agency,account_number,balance) VALUES (?,?,?,?)',
-    [adminId, '0001', '000000-0', 0.00]
-  );
-
-  console.log('Usuário administrador criado automaticamente.');
 }
 
 async function ensureAdminUserWithRetry(retries = 10, delay = 3000) {
@@ -105,46 +115,85 @@ async function ensureAdminUserWithRetry(retries = 10, delay = 3000) {
       await pool.query('SELECT 1');
       await ensureAdminUser();
       return;
-    } catch {
-      console.log(`MySQL ainda não respondeu... tentativa ${i + 1}/${retries}`);
-      await new Promise((r) => setTimeout(r, delay));
+    } catch (err) {
+      console.log(`MySQL não pronto ainda... tentativa ${i + 1}/${retries}`);
+      await new Promise(r => setTimeout(r, delay));
     }
   }
-  console.error('Não foi possível conectar ao MySQL após várias tentativas.');
+  console.error('Falha ao conectar ao MySQL após várias tentativas.');
 }
+
 ensureAdminUserWithRetry();
 
-// ----------------- ROTA TEST -----------------
-app.get('/api/test', (req, res) => {
-  res.json({ ok: true, message: 'API ok' });
+// --- Rotas básicas de teste ---
+app.get('/', (req, res) => {
+  res.json({ ok: true, message: 'API Banco Bradesco ONLINE' });
 });
 
-// ----------------- CADASTRO CLIENTE -----------------
+app.get('/api/test', (req, res) => {
+  res.json({ ok: true, message: 'GET /api/test ok' });
+});
+
+// --- Cadastro de usuário (cliente) ---
 async function registerHandler(req, res) {
   try {
-    // IMPORTANTE: casa com cadastro.html (name, cpf, email, password)
-    const { name, cpf, email, password } = req.body || {};
+    const { nome, name, email, cpf, senha, password } = req.body || {};
 
-    const nomeFinal = (name || '').trim();
+    const nomeFinal  = (nome || name || '').trim();
     const emailFinal = (email || '').trim().toLowerCase();
-    const cpfNum = (cpf || '').replace(/\D+/g, '');
-    const senhaFinal = password || '';
+    const cpfNum     = (cpf || '').replace(/\D+/g, '');
+    const senhaFinal = senha || password || '';
 
     if (!nomeFinal || !emailFinal || !cpfNum || !senhaFinal) {
-      return res.status(400).json({ ok: false, message: 'Preencha todos os campos.' });
+      return res
+        .status(400)
+        .json({ ok: false, message: 'Preencha todos os campos.' });
     }
 
+    // verifica se já existe usuário com esse CPF ou e-mail
     const [existe] = await pool.execute(
-      'SELECT id FROM users WHERE cpf = ? OR email = ? LIMIT 1',
+      'SELECT id,status FROM users WHERE cpf = ? OR email = ? LIMIT 1',
       [cpfNum, emailFinal]
     );
+
     if (existe.length) {
-      return res.status(409).json({
-        ok: false,
-        message: 'Já existe cadastro com este CPF ou e-mail.'
-      });
+      const existing = existe[0];
+
+      // se já existia mas foi REPROVADO, permitimos "recadastro"
+      if (existing.status === 'rejected') {
+        const hash = await bcrypt.hash(senhaFinal, 10);
+
+        await pool.execute(
+          'UPDATE users SET name = ?, email = ?, cpf = ?, password_hash = ?, status = "pending" WHERE id = ?',
+          [nomeFinal, emailFinal, cpfNum, hash, existing.id]
+        );
+
+        // garante conta
+        const [accRows] = await pool.execute(
+          'SELECT id FROM accounts WHERE user_id = ? LIMIT 1',
+          [existing.id]
+        );
+        if (!accRows.length) {
+          const conta = String(100000 + parseInt(existing.id, 10));
+          await pool.execute(
+            'INSERT INTO accounts (user_id,agency,account_number,balance) VALUES (?,?,?,0)',
+            [existing.id, '0001', conta]
+          );
+        }
+
+        return res.json({
+          ok: true,
+          message: 'Cadastro reenviado. Sua conta está em análise novamente pelo administrador.'
+        });
+      }
+
+      // se está pendente ou ativo, não deixa recadastrar
+      return res
+        .status(409)
+        .json({ ok: false, message: 'Já existe cadastro com este CPF ou e-mail.' });
     }
 
+    // cadastro novo
     const hash = await bcrypt.hash(senhaFinal, 10);
     const [result] = await pool.execute(
       'INSERT INTO users (name,email,cpf,password_hash,role,status) VALUES (?,?,?,?,"user","pending")',
@@ -165,17 +214,26 @@ async function registerHandler(req, res) {
     });
   } catch (err) {
     console.error('Erro registerHandler:', err);
-    return res.status(500).json({ ok: false, message: 'Erro ao cadastrar.' });
+    let msg = 'Erro ao cadastrar.';
+    if (err && err.code === 'ER_NO_SUCH_TABLE') {
+      msg = 'Tabelas do banco não encontradas. Confira se o schema.mysql.sql foi carregado.';
+    } else if (err && err.code === 'ER_ACCESS_DENIED_ERROR') {
+      msg = 'Erro de acesso ao MySQL. Confira usuário e senha do banco.';
+    } else if (err && err.code === 'ECONNREFUSED') {
+      msg = 'Não foi possível conectar ao banco de dados. Verifique se o serviço mysql está ativo.';
+    } else if (err && err.sqlMessage) {
+      msg = err.sqlMessage;
+    }
+    return res.status(500).json({ ok: false, message: msg });
   }
 }
 
 app.post('/api/auth/register', registerHandler);
-app.post('/auth/register', registerHandler); // caso o front use sem /api
+app.post('/auth/register', registerHandler);
 
-// ----------------- LOGIN CLIENTE -----------------
+// --- Login do cliente ---
 async function loginHandler(req, res) {
   try {
-    // casa com login.html (identifier, by, password)
     const { identifier, by, password, cpf, email } = req.body || {};
 
     let where = '';
@@ -183,22 +241,22 @@ async function loginHandler(req, res) {
 
     if (identifier && by) {
       if (by === 'cpf') {
+        const cpfNum = identifier.replace(/\D+/g, '');
         where = 'cpf = ?';
-        param = String(identifier).replace(/\D+/g, '');
+        param = cpfNum;
       } else if (by === 'email') {
         where = 'LOWER(email) = LOWER(?)';
-        param = String(identifier).toLowerCase();
+        param = identifier.toLowerCase();
       }
     } else if (cpf) {
+      const cpfNum = cpf.replace(/\D+/g, '');
       where = 'cpf = ?';
-      param = String(cpf).replace(/\D+/g, '');
+      param = cpfNum;
     } else if (email) {
       where = 'LOWER(email) = LOWER(?)';
-      param = String(email).toLowerCase();
+      param = email.toLowerCase();
     } else {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'Informe CPF ou e-mail e senha.' });
+      return res.status(400).json({ ok: false, message: 'Informe CPF ou e-mail e senha.' });
     }
 
     const [rows] = await pool.execute(
@@ -208,9 +266,9 @@ async function loginHandler(req, res) {
     if (!rows.length) {
       return res.status(404).json({ ok: false, message: 'Usuário não encontrado.' });
     }
-    const user = rows[0];
 
-    const okPass = await bcrypt.compare(password || '', user.password_hash);
+    const user = rows[0];
+    const okPass = await bcrypt.compare(password, user.password_hash);
     if (!okPass) {
       return res.status(401).json({ ok: false, message: 'Senha inválida.' });
     }
@@ -241,24 +299,7 @@ async function loginHandler(req, res) {
 app.post('/api/auth/login', loginHandler);
 app.post('/auth/login', loginHandler);
 
-// ----------------- SALDO / CONTA -----------------
-app.get('/api/balance', authUser, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const [rows] = await pool.execute(
-      'SELECT balance FROM accounts WHERE user_id = ? LIMIT 1',
-      [userId]
-    );
-    if (!rows.length) {
-      return res.status(404).json({ ok: false, balance: 0 });
-    }
-    return res.json({ ok: true, balance: rows[0].balance });
-  } catch (err) {
-    console.error('Erro /api/balance:', err);
-    return res.status(500).json({ ok: false, balance: 0 });
-  }
-});
-
+// --- Rotas da conta do usuário ---
 app.get('/api/me/account', authUser, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -286,7 +327,7 @@ app.get('/api/me/account', authUser, async (req, res) => {
   }
 });
 
-// ----------------- PIX: CHAVES -----------------
+// --- PIX: listar chaves ---
 app.get('/api/me/pix-keys', authUser, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -301,11 +342,11 @@ app.get('/api/me/pix-keys', authUser, async (req, res) => {
   }
 });
 
+// --- PIX: cadastrar chave ---
 app.post('/api/me/pix-keys', authUser, async (req, res) => {
   try {
     const userId = req.user.id;
     let { tipo, valor } = req.body || {};
-
     if (!tipo) {
       return res.status(400).json({ ok: false, message: 'Informe o tipo da chave.' });
     }
@@ -321,7 +362,11 @@ app.post('/api/me/pix-keys', authUser, async (req, res) => {
       [userId, tipo, valor]
     );
 
-    return res.json({ ok: true, message: 'Chave PIX cadastrada com sucesso.' });
+    return res.json({
+      ok: true,
+      message: 'Chave PIX cadastrada com sucesso.',
+      key: { tipo, valor }
+    });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ ok: false, message: 'Esta chave PIX já está em uso.' });
@@ -331,13 +376,12 @@ app.post('/api/me/pix-keys', authUser, async (req, res) => {
   }
 });
 
-// ----------------- PIX: TRANSFERÊNCIA -----------------
+// --- PIX: transferência ---
 app.post('/api/me/pix-transfer', authUser, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const userId = req.user.id;
     const { chaveDestino, valor, descricao } = req.body || {};
-
     if (!chaveDestino || !valor) {
       conn.release();
       return res.status(400).json({ ok: false, message: 'Informe chave de destino e valor.' });
@@ -358,8 +402,7 @@ app.post('/api/me/pix-transfer', authUser, async (req, res) => {
     const contaOrig = origRows[0];
 
     if (Number(contaOrig.balance) < valorNum) {
-      await conn.rollback();
-      conn.release();
+      await conn.rollback(); conn.release();
       return res.status(400).json({ ok: false, message: 'Saldo insuficiente.' });
     }
 
@@ -368,8 +411,7 @@ app.post('/api/me/pix-transfer', authUser, async (req, res) => {
       [chaveDestino]
     );
     if (!pixRows.length) {
-      await conn.rollback();
-      conn.release();
+      await conn.rollback(); conn.release();
       return res.status(404).json({ ok: false, message: 'Chave PIX de destino não encontrada.' });
     }
     const contaDest = pixRows[0];
@@ -392,13 +434,13 @@ app.post('/api/me/pix-transfer', authUser, async (req, res) => {
     return res.json({ ok: true, message: 'PIX realizado com sucesso.' });
   } catch (err) {
     console.error('Erro /api/me/pix-transfer:', err);
-    try { await conn.rollback(); } catch {}
+    try { await conn.rollback(); } catch (_) {}
     conn.release();
     return res.status(500).json({ ok: false, message: 'Erro ao processar transferência PIX.' });
   }
 });
 
-// ----------------- EXTRATO -----------------
+// --- Extrato ---
 app.get('/api/me/statement', authUser, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -412,14 +454,20 @@ app.get('/api/me/statement', authUser, async (req, res) => {
     const accountId = accRows[0].id;
 
     const [rows] = await pool.execute(
-      `SELECT id,from_account_id,to_account_id,amount,description,created_at
-         FROM transfers
-        WHERE from_account_id = ? OR to_account_id = ?
-        ORDER BY created_at DESC`,
+      `SELECT
+        t.id,
+        t.from_account_id,
+        t.to_account_id,
+        t.amount,
+        t.description,
+        t.created_at
+       FROM transfers t
+       WHERE t.from_account_id = ? OR t.to_account_id = ?
+       ORDER BY t.created_at DESC`,
       [accountId, accountId]
     );
 
-    const items = rows.map((t) => ({
+    const items = rows.map(t => ({
       id: t.id,
       kind: t.from_account_id === accountId ? 'sent' : 'received',
       amount: t.amount,
@@ -434,57 +482,7 @@ app.get('/api/me/statement', authUser, async (req, res) => {
   }
 });
 
-// ----------------- CONTATOS -----------------
-app.get('/api/contacts', authUser, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const [rows] = await pool.execute(
-      'SELECT id,name,cpf,created_at FROM contacts WHERE user_id = ? ORDER BY created_at DESC',
-      [userId]
-    );
-    return res.json({ ok: true, items: rows });
-  } catch (err) {
-    console.error('Erro GET /api/contacts:', err);
-    return res.status(500).json({ ok: false, message: 'Erro ao listar contatos.' });
-  }
-});
-
-app.post('/api/contacts', authUser, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { name, cpf } = req.body || {};
-    const nome = (name || '').trim();
-    const cpfNum = (cpf || '').replace(/\D+/g, '');
-    if (!nome || cpfNum.length !== 11) {
-      return res.status(400).json({ ok: false, message: 'Nome ou CPF inválidos.' });
-    }
-    await pool.execute(
-      'INSERT INTO contacts (user_id,name,cpf) VALUES (?,?,?)',
-      [userId, nome, cpfNum]
-    );
-    return res.json({ ok: true, message: 'Contato salvo.' });
-  } catch (err) {
-    console.error('Erro POST /api/contacts:', err);
-    return res.status(500).json({ ok: false, message: 'Erro ao salvar contato.' });
-  }
-});
-
-app.delete('/api/contacts/:id', authUser, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const id = req.params.id;
-    await pool.execute(
-      'DELETE FROM contacts WHERE id = ? AND user_id = ?',
-      [id, userId]
-    );
-    return res.json({ ok: true, message: 'Contato removido.' });
-  } catch (err) {
-    console.error('Erro DELETE /api/contacts/:id:', err);
-    return res.status(500).json({ ok: false, message: 'Erro ao remover contato.' });
-  }
-});
-
-// ----------------- ADMIN 2FA: PEDIR CÓDIGO -----------------
+// --- ADMIN 2FA: solicitar código (sem exigir senha) ---
 async function handleRequest2FA(req, res) {
   try {
     const { email, cpf } = req.body || {};
@@ -500,16 +498,18 @@ async function handleRequest2FA(req, res) {
     }
 
     const [rows] = await pool.execute(
-      'SELECT id FROM users WHERE email = ? AND role = "admin" LIMIT 1',
+      "SELECT id FROM users WHERE email = ? AND role = 'admin' LIMIT 1",
       [ADMIN_EMAIL]
     );
     if (!rows.length) {
-      return res.status(404).json({ ok: false, message: 'Administrador não encontrado no banco.' });
+      return res
+        .status(404)
+        .json({ ok: false, message: 'Administrador não encontrado no banco.' });
     }
     const adminDb = rows[0];
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 min
 
     adminTokens.set(ADMIN_CPF, { code, expiresAt, adminId: adminDb.id });
 
@@ -527,17 +527,24 @@ async function handleRequest2FA(req, res) {
       html
     });
 
-    return res.json({ ok: true, message: 'Código 2FA enviado para o e-mail do administrador.' });
+    return res.json({
+      ok: true,
+      message: 'Código 2FA enviado para o e-mail do administrador.'
+    });
   } catch (err) {
     console.error('Erro /api/admin/request-2fa:', err);
-    return res.status(500).json({ ok: false, message: 'Erro ao enviar código 2FA.' });
+    const msgDetalhe = err && err.message ? ` Detalhe: ${err.message}` : '';
+    return res
+      .status(500)
+      .json({ ok: false, message: 'Erro ao enviar código 2FA.' + msgDetalhe });
   }
 }
 
 app.post('/api/admin/request-2fa', handleRequest2FA);
+app.post('/admin/request-2fa', handleRequest2FA);
 
-// ----------------- ADMIN 2FA: VALIDAR CÓDIGO -----------------
-app.post('/api/admin/verify-2fa', (req, res) => {
+// --- 2FA Admin: validar código ---
+function handleVerify2FA(req, res) {
   const { cpf, code, codigo } = req.body || {};
   const cpfNum = (cpf || '').replace(/\D+/g, '');
   const codeFinal = code || codigo;
@@ -557,30 +564,35 @@ app.post('/api/admin/verify-2fa', (req, res) => {
     adminTokens.delete(ADMIN_CPF);
     return res.status(400).json({ ok: false, message: 'Código expirado. Gere um novo.' });
   }
-  if (String(info.code) !== String(codeFinal)) {
+  if (String(codeFinal) !== String(info.code)) {
     return res.status(400).json({ ok: false, message: 'Código inválido.' });
   }
 
   adminTokens.delete(ADMIN_CPF);
 
   const token = gerarTokenJWT({ id: info.adminId, role: 'admin' }, '2h');
+
   return res.json({
     ok: true,
     token,
     role: 'admin',
     name: ADMIN_NAME
   });
-});
+}
 
-// ----------------- ADMIN: VALIDA TOKEN + PENDENTES -----------------
+app.post('/api/admin/verify-2fa', handleVerify2FA);
+app.post('/admin/verify-2fa', handleVerify2FA);
+
+// --- Admin: validar sessão ---
 app.get('/api/admin/validate-token', authAdmin, (req, res) => {
   return res.json({ ok: true });
 });
 
+// --- Admin: listar pendentes ---
 app.get('/api/admin/pending-users', authAdmin, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT id,name,email,cpf,created_at FROM users WHERE role = "user" AND status = "pending" ORDER BY created_at ASC'
+      "SELECT id,name,email,cpf,created_at FROM users WHERE role = 'user' AND status = 'pending' ORDER BY created_at ASC"
     );
     return res.json({ ok: true, users: rows });
   } catch (err) {
@@ -589,24 +601,42 @@ app.get('/api/admin/pending-users', authAdmin, async (req, res) => {
   }
 });
 
+// --- Admin: listar TODOS os clientes (com status) ---
+app.get('/api/admin/users', authAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT id,name,email,cpf,status,created_at FROM users WHERE role = 'user' ORDER BY created_at DESC"
+    );
+    return res.json({ ok: true, users: rows });
+  } catch (err) {
+    console.error('Erro /api/admin/users:', err);
+    return res.status(500).json({ ok: false, message: 'Erro ao buscar usuários.' });
+  }
+});
+
+// --- Admin: aprovar / reprovar usuário ---
 app.post('/api/admin/users/:id/approve', authAdmin, async (req, res) => {
   try {
     const userId = req.params.id;
-    await pool.execute('UPDATE users SET status = "active" WHERE id = ?', [userId]);
+
+    await pool.execute(
+      "UPDATE users SET status = 'active' WHERE id = ?",
+      [userId]
+    );
 
     const [accRows] = await pool.execute(
       'SELECT id FROM accounts WHERE user_id = ? LIMIT 1',
       [userId]
     );
     if (!accRows.length) {
-      const conta = String(100000 + parseInt(userId, 10));
+      const accountNumber = String(100000 + parseInt(userId, 10));
       await pool.execute(
         'INSERT INTO accounts (user_id,agency,account_number,balance) VALUES (?,?,?,0)',
-        [userId, '0001', conta]
+        [userId, '0001', accountNumber]
       );
     }
 
-    return res.json({ ok: true, message: 'Usuário aprovado.' });
+    return res.json({ ok: true, message: 'Usuário aprovado com sucesso.' });
   } catch (err) {
     console.error('Erro /api/admin/users/:id/approve:', err);
     return res.status(500).json({ ok: false, message: 'Erro ao aprovar usuário.' });
@@ -616,7 +646,12 @@ app.post('/api/admin/users/:id/approve', authAdmin, async (req, res) => {
 app.post('/api/admin/users/:id/reject', authAdmin, async (req, res) => {
   try {
     const userId = req.params.id;
-    await pool.execute('UPDATE users SET status = "rejected" WHERE id = ?', [userId]);
+
+    await pool.execute(
+      "UPDATE users SET status = 'rejected' WHERE id = ?",
+      [userId]
+    );
+
     return res.json({ ok: true, message: 'Usuário reprovado.' });
   } catch (err) {
     console.error('Erro /api/admin/users/:id/reject:', err);
@@ -624,7 +659,7 @@ app.post('/api/admin/users/:id/reject', authAdmin, async (req, res) => {
   }
 });
 
-// ----------------- START -----------------
+// --- Inicialização do servidor ---
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`API Banco rodando na porta ${PORT}`);
+  console.log(`API Banco Bradesco rodando na porta ${PORT}`);
 });

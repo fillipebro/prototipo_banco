@@ -1,195 +1,186 @@
 const API_BASE = '/api';
 
-function getToken(){
-  return localStorage.getItem('token');
+function getUserToken() {
+  return localStorage.getItem('userToken') || localStorage.getItem('token');
 }
 
-function exigirLogin(){
-  if(!getToken()){
-    alert('Faça login para acessar sua conta.');
+async function exigirLogin() {
+  const token = getUserToken();
+  if (!token) {
+    alert('Faça login para acessar o dashboard.');
     window.location.href = 'login.html';
   }
 }
 
-exigirLogin();
-
-async function carregarConta(){
-  try{
-    const res = await fetch(`${API_BASE}/me/account`, {
-      headers:{ Authorization:`Bearer ${getToken()}` }
-    });
-    const data = await res.json();
-    if(!data.ok){
-      alert(data.message || 'Erro ao carregar conta.');
-      return;
+async function apiUserGet(path) {
+  const token = getUserToken();
+  const res = await fetch(API_BASE + path, {
+    headers: {
+      Authorization: `Bearer ${token}`
     }
-    document.getElementById('agencia').textContent = data.account.agency;
-    document.getElementById('conta').textContent = data.account.account_number;
-    document.getElementById('saldo').textContent =
-      Number(data.account.balance).toFixed(2).replace('.', ',');
-if(data.account.name){
-  document.getElementById('cliente-nome').textContent = data.account.name;
-}
-if(data.account.cpf){
-  document.getElementById('cliente-cpf').textContent = data.account.cpf;
-}
-if(data.account.email){
-  document.getElementById('cliente-email').textContent = data.account.email;
-}
-
-  }catch(err){
-    console.error(err);
-    alert('Erro ao buscar dados da conta.');
+  });
+  const ct = res.headers.get('content-type') || '';
+  const payload = ct.includes('application/json')
+    ? await res.json().catch(() => ({}))
+    : await res.text();
+  if (!res.ok) {
+    const msg = (payload && payload.message)
+      ? payload.message
+      : (typeof payload === 'string' ? payload : 'Erro na solicitação.');
+    throw new Error(msg);
   }
+  return payload;
 }
 
-async function carregarChavesPix(){
-  try{
-    const res = await fetch(`${API_BASE}/me/pix-keys`, {
-      headers:{ Authorization:`Bearer ${getToken()}` }
-    });
-    const data = await res.json();
-    const tbody = document.getElementById('lista-chaves');
-    if(!data.ok || !data.keys || !data.keys.length){
-      tbody.innerHTML = '<tr><td class="muted" colspan="3">Nenhuma chave cadastrada.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.keys.map(k => {
-      const dt = k.created_at ? new Date(k.created_at).toLocaleString('pt-BR') : '-';
-      return `<tr>
-        <td>${k.key_type}</td>
-        <td>${k.key_value}</td>
-        <td>${dt}</td>
-      </tr>`;
-    }).join('');
-  }catch(err){
-    console.error(err);
-    document.getElementById('lista-chaves').innerHTML =
-      '<tr><td class="muted" colspan="3">Erro ao carregar chaves.</td></tr>';
+async function apiUserPost(path, body) {
+  const token = getUserToken();
+  const res = await fetch(API_BASE + path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(body || {})
+  });
+  const ct = res.headers.get('content-type') || '';
+  const payload = ct.includes('application/json')
+    ? await res.json().catch(() => ({}))
+    : await res.text();
+  if (!res.ok) {
+    const msg = (payload && payload.message)
+      ? payload.message
+      : (typeof payload === 'string' ? payload : 'Erro na solicitação.');
+    throw new Error(msg);
   }
+  return payload;
 }
 
-document.getElementById('tipo-chave').addEventListener('change', (e)=>{
-  const field = document.getElementById('field-valor-chave');
-  const input = document.getElementById('valor-chave');
-  if(e.target.value === 'random'){
-    field.style.display = 'none';
-    input.value = '';
-  }else{
-    field.style.display = 'flex';
+function formatMoney(v) {
+  const num = Number(v || 0);
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatDate(d) {
+  return new Date(d).toLocaleString('pt-BR');
+}
+
+// --- carregar dados da conta ---
+async function carregarConta() {
+  const data = await apiUserGet('/me/account');
+  if (!data.ok || !data.account) return;
+
+  const acc = data.account;
+  document.getElementById('userName').textContent = acc.name;
+  document.getElementById('agency').textContent = acc.agency;
+  document.getElementById('accountNumber').textContent = acc.account_number;
+  document.getElementById('balance').textContent = formatMoney(acc.balance);
+}
+
+// --- carregar chaves PIX ---
+async function carregarPix() {
+  const lista = document.getElementById('listaPix');
+  lista.innerHTML = '<li class="muted">Carregando...</li>';
+
+  const data = await apiUserGet('/me/pix-keys');
+  if (!data.ok) {
+    lista.innerHTML = '<li class="muted">Erro ao carregar chaves.</li>';
+    return;
   }
-});
-
-document.getElementById('form-chave-pix').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const tipo = document.getElementById('tipo-chave').value;
-  const valorInput = document.getElementById('valor-chave');
-  let valor = valorInput.value.trim();
-
-  if(tipo !== 'random' && !valor){
-    alert('Informe o valor da chave.');
+  if (!data.keys || !data.keys.length) {
+    lista.innerHTML = '<li class="muted">Nenhuma chave cadastrada.</li>';
     return;
   }
 
-  const body = { tipo, valor: tipo === 'random' ? undefined : valor };
+  lista.innerHTML = data.keys.map(k => `
+    <li>
+      <strong>${k.key_type}:</strong> ${k.key_value}
+      <span class="muted">(${formatDate(k.created_at)})</span>
+    </li>
+  `).join('');
+}
 
-  try{
-    const res = await fetch(`${API_BASE}/me/pix-keys`, {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        Authorization:`Bearer ${getToken()}`
-      },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if(!data.ok){
-      alert(data.message || 'Erro ao cadastrar chave PIX.');
+// --- carregar extrato ---
+async function carregarExtrato() {
+  const tbody = document.getElementById('tbodyExtrato');
+  tbody.innerHTML = '<tr><td colspan="4" class="muted">Carregando...</td></tr>';
+
+  try {
+    const data = await apiUserGet('/me/statement');
+    if (!data.ok || !data.items || !data.items.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="muted">Nenhuma movimentação.</td></tr>';
       return;
     }
+    tbody.innerHTML = data.items.map(it => `
+      <tr>
+        <td>${formatDate(it.created_at)}</td>
+        <td>${it.kind === 'sent' ? 'Enviado' : 'Recebido'}</td>
+        <td>${it.kind === 'sent' ? '-' : ''}R$ ${formatMoney(it.amount)}</td>
+        <td>${it.description || '-'}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error('Erro extrato:', err);
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">Erro: ${err.message}</td></tr>`;
+  }
+}
+
+// --- eventos PIX ---
+document.getElementById('pixTipo').addEventListener('change', (e) => {
+  const tipo = e.target.value;
+  const row = document.getElementById('rowPixValor');
+  if (tipo === 'random') {
+    row.style.display = 'none';
+  } else {
+    row.style.display = '';
+  }
+});
+
+document.getElementById('btnAddPix').addEventListener('click', async () => {
+  try {
+    const tipo = document.getElementById('pixTipo').value;
+    let valor = document.getElementById('pixValor').value.trim();
+    if (tipo !== 'random' && !valor) {
+      alert('Informe o valor da chave.');
+      return;
+    }
+    await apiUserPost('/me/pix-keys', { tipo, valor });
     alert('Chave PIX cadastrada com sucesso.');
-    valorInput.value = '';
-    carregarChavesPix();
-  }catch(err){
-    console.error(err);
-    alert('Erro de conexão ao cadastrar chave.');
+    document.getElementById('pixValor').value = '';
+    await carregarPix();
+  } catch (err) {
+    alert(err.message);
   }
 });
 
-document.getElementById('form-transferencia').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const chave = document.getElementById('chave-destino').value.trim();
-  const valor = document.getElementById('valor-transferencia').value.trim();
-  const descricao = document.getElementById('descricao-transferencia').value.trim();
-
-  if(!chave || !valor){
-    alert('Preencha a chave de destino e o valor.');
-    return;
-  }
-
-  const ok = confirm(`Confirmar envio de R$ ${valor} para a chave PIX:\n\n${chave} ?`);
-  if(!ok) return;
-
-  try{
-    const res = await fetch(`${API_BASE}/me/pix-transfer`, {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        Authorization:`Bearer ${getToken()}`
-      },
-      body: JSON.stringify({
-        chaveDestino: chave,
-        valor,
-        descricao
-      })
-    });
-    const data = await res.json();
-    if(!data.ok){
-      alert(data.message || 'Erro ao realizar PIX.');
+document.getElementById('btnEnviarPix').addEventListener('click', async () => {
+  try {
+    const chaveDestino = document.getElementById('pixChaveDestino').value.trim();
+    const valor = document.getElementById('pixValorEnvio').value;
+    const descricao = document.getElementById('pixDescricao').value.trim();
+    if (!chaveDestino || !valor) {
+      alert('Informe chave de destino e valor.');
       return;
     }
-    alert('PIX realizado com sucesso.');
-    document.getElementById('form-transferencia').reset();
-    carregarConta();
-  }catch(err){
-    console.error(err);
-    alert('Erro de conexão ao enviar PIX.');
+    await apiUserPost('/me/pix-transfer', { chaveDestino, valor, descricao });
+    alert('PIX enviado com sucesso.');
+    document.getElementById('pixValorEnvio').value = '';
+    document.getElementById('pixDescricao').value = '';
+    await carregarConta();
+    await carregarExtrato();
+  } catch (err) {
+    alert(err.message);
   }
 });
 
+document.getElementById('btnLogout').addEventListener('click', () => {
+  localStorage.removeItem('userToken');
+  localStorage.removeItem('token');
+  window.location.href = 'login.html';
+});
 
-
-async function carregarExtrato(){
-  try{
-    const res = await fetch(`${API_BASE}/me/statement`, {
-      headers:{ Authorization:`Bearer ${getToken()}` }
-    });
-    const data = await res.json();
-    const tbody = document.getElementById('extrato-body');
-    if(!data.ok || !data.items || !data.items.length){
-      tbody.innerHTML = '<tr><td class="muted" colspan="4">Nenhuma movimentação encontrada.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.items.map(t => {
-      const tipo = t.kind === 'sent' ? 'Enviado' : 'Recebido';
-      const valor = Number(t.amount).toFixed(2).replace('.', ',');
-      const desc = t.description || '-';
-      const dt = t.created_at ? new Date(t.created_at).toLocaleString('pt-BR') : '-';
-      return `<tr>
-        <td>${tipo}</td>
-        <td>R$ ${valor}</td>
-        <td>${desc}</td>
-        <td>${dt}</td>
-      </tr>`;
-    }).join('');
-  }catch(err){
-    console.error(err);
-    document.getElementById('extrato-body').innerHTML =
-      '<tr><td class="muted" colspan="4">Erro ao carregar extrato.</td></tr>';
-  }
-}
-
-// inicialização
-carregarConta();
-carregarChavesPix();
-carregarExtrato();
+(async () => {
+  await exigirLogin();
+  await carregarConta();
+  await carregarPix();
+  await carregarExtrato();
+})();
