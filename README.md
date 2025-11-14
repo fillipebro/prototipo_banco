@@ -73,15 +73,16 @@ Este projeto demonstra:
 
 ---
 
-👨‍💻 **Desenvolvido por:** Fillipe de Oliveira Ribeiro - 12524114105, Rafael Henrique Teixeira 
+👨‍💻 **Desenvolvido por: Fillipe de Oliveira Ribeiro - 12524114105, Rafael Henrique Teixeira 
 RA: 12524146476, Nycolas Machado Amaral
 RA: 12525189402, Ernesto C. O. De Miranda 
 RA: 12524129426, Felipe Diego hespanhol Cea 
 RA: 12524245980, Flávio Matheus Durão Romero 
-RA: 12522169557, Felipe juan Sampaio da Silva RA: 12522211155 ** 
+RA: 12522169557, Felipe juan Sampaio da Silva RA: 12522211155** 
 
 📚 **Disciplina:** Sistemas distribuidos e mobile
 🏦 **Tema:** Prevenção de Golpes Financeiros — Desafio Bradesco
+
 
 
 
