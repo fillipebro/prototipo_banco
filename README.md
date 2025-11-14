@@ -68,7 +68,6 @@ Este projeto demonstra:
 - Aplicação de **lógica de programação e segurança**;
 - Criação de **APIs REST** integradas ao **frontend**;
 - Uso de **Docker**, **banco de dados** e **boas práticas antifraude**;
-- Estrutura pronta para **evoluir com microsserviços, mensageria e deploy em nuvem**.
 
 > A ideia é mostrar que é possível proteger o usuário **com tecnologia e educação digital**, seguindo as recomendações do Banco Central e da própria Bradesco.
 
@@ -83,6 +82,7 @@ RA: 12522169557, Felipe juan Sampaio da Silva RA: 12522211155 **
 
 📚 **Disciplina:** Sistemas distribuidos e mobile
 🏦 **Tema:** Prevenção de Golpes Financeiros — Desafio Bradesco
+
 
 
 
