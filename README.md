@@ -57,8 +57,6 @@ O frontend mostra notificações e bloqueios automáticos conforme o comportamen
 
 **Frontend**
 - HTML5, CSS3, JavaScript
-- Scripts modulares (`auth.js`, `api.js`, `dashboard.js`, etc.)
-
 
 ---
 
@@ -85,5 +83,6 @@ RA: 12522169557, Felipe juan Sampaio da Silva RA: 12522211155 **
 
 📚 **Disciplina:** Sistemas distribuidos e mobile
 🏦 **Tema:** Prevenção de Golpes Financeiros — Desafio Bradesco
+
 
 
