@@ -1,0 +1,15 @@
+# Dockerfile.api - imagem da API Node
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instala apenas o necessário
+COPY package*.json ./
+RUN npm install --only=production
+
+# Copia código da API
+COPY server.js db.js ./
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]

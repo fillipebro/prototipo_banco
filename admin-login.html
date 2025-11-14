@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login Administrador — Banco Bradesco</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-app">
+  <canvas id="bgParticles"></canvas>
+  <a class="corner-logo" href="index.html" aria-label="Voltar para a página inicial">
+    <img src="img/logo.png" alt="Banco Bradesco">
+  </a>
+
+  <div class="center-area">
+    <section class="card auth-card" style="max-width:420px;">
+      <h2>Área do Administrador</h2>
+      <p class="muted">Acesso exclusivo do administrador responsável.</p>
+
+      <div id="step1">
+        <div id="adminAlert1" class="alert" role="alert"></div>
+        <form id="form-admin-step1" class="form" autocomplete="off">
+          <label class="field">
+            <span>E-mail do administrador</span>
+            <input type="email" id="admin-email" required autocomplete="off" placeholder="admin@bradesco.com">
+          </label>
+          <label class="field">
+            <span>CPF do administrador</span>
+            <input type="text" id="admin-cpf" required autocomplete="off" placeholder="000.000.000-00">
+          </label>
+          <label class="field">
+            <span>Senha</span>
+            <input type="password" id="admin-senha" required autocomplete="current-password">
+          </label>
+          <button type="submit" class="btn btn-primary full" id="btnAdminStep1">Enviar código 2FA</button>
+        </form>
+      </div>
+
+      <div id="step2" style="display:none;">
+        <div id="adminAlert2" class="alert" role="alert"></div>
+        <p class="muted">Enviamos um código de verificação para o e-mail cadastrado. Digite abaixo para confirmar o acesso.</p>
+        <form id="form-admin-step2" class="form" autocomplete="off">
+          <label class="field">
+            <span>Código de verificação</span>
+            <input type="text" id="admin-codigo" required maxlength="6" placeholder="Ex: 123456">
+          </label>
+          <button type="submit" class="btn btn-primary full" id="btnAdminStep2">Entrar no painel</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <script src="js/cpf.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/anim.js"></script>
+  <script>
+    const API_BASE = '/api';
+    let adminCpfGlobal = null;
+
+    function showAlert(el, type, msg){
+      el.className = 'alert show ' + type;
+      el.textContent = msg;
+    }
+
+    const form1 = document.getElementById('form-admin-step1');
+    const form2 = document.getElementById('form-admin-step2');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const alert1 = document.getElementById('adminAlert1');
+    const alert2 = document.getElementById('adminAlert2');
+    const btn1 = document.getElementById('btnAdminStep1');
+    const btn2 = document.getElementById('btnAdminStep2');
+
+    form1.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const email = document.getElementById('admin-email').value.trim();
+      const cpf   = document.getElementById('admin-cpf').value.trim();
+      const senha = document.getElementById('admin-senha').value.trim();
+
+      if(!email || !cpf || !senha){
+        showAlert(alert1, 'error', 'Preencha todos os campos.');
+        return;
+      }
+
+      // Aqui usamos apenas e-mail e CPF para validar como admin. A senha pode ser validada no backend se você quiser.
+      adminCpfGlobal = cpf;
+
+      try{
+        btn1.disabled = true;
+        btn1.textContent = 'Enviando código...';
+        const res = await fetch(API_BASE + '/admin/request-2fa', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ email, cpf })
+        });
+        const payload = await res.json();
+        if(!payload.ok){
+          showAlert(alert1, 'error', payload.message || 'Erro ao iniciar 2FA.');
+        }else{
+          showAlert(alert1, 'success', 'Código enviado para o e-mail do administrador.');
+          step1.style.display = 'none';
+          step2.style.display = 'block';
+        }
+      }catch(err){
+        showAlert(alert1, 'error', err.message || 'Erro ao conectar com o servidor.');
+      }finally{
+        btn1.disabled = false;
+        btn1.textContent = 'Enviar código 2FA';
+      }
+    });
+
+    form2.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const code = document.getElementById('admin-codigo').value.trim();
+      if(!code || !adminCpfGlobal){
+        showAlert(alert2, 'error', 'Informe o código recebido por e-mail.');
+        return;
+      }
+      try{
+        btn2.disabled = true;
+        btn2.textContent = 'Validando...';
+        const res = await fetch(API_BASE + '/admin/verify-2fa', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ cpf: adminCpfGlobal, code })
+        });
+        const payload = await res.json();
+        if(!payload.ok){
+          showAlert(alert2, 'error', payload.message || 'Código inválido ou expirado.');
+        }else{
+          localStorage.setItem('adminToken', payload.token);
+          showAlert(alert2, 'success', 'Acesso autorizado. Redirecionando...');
+          setTimeout(()=> window.location.href = 'admin.html', 800);
+        }
+      }catch(err){
+        showAlert(alert2, 'error', err.message || 'Erro ao validar o código.');
+      }finally{
+        btn2.disabled = false;
+        btn2.textContent = 'Entrar no painel';
+      }
+    });
+  </script>
+</body>
+</html>
